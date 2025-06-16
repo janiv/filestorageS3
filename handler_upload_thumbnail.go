@@ -1,9 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -41,26 +46,25 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 	mediaType := header.Header.Get("Content-Type")
-	byteSlice, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to read file", err)
-		return
-	}
 	vid, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Mismatch bro", err)
 		return
 	}
-
-	tnail := thumbnail{
-		data:      byteSlice,
-		mediaType: mediaType,
+	wd, _ := os.Getwd()
+	fileExtens := strings.TrimPrefix(mediaType, "image/")
+	key := make([]byte, 32)
+	rand.Read(key)
+	keyString := base64.RawURLEncoding.EncodeToString(key)
+	fileName := keyString + "." + fileExtens
+	filePathName := filepath.Join(wd, cfg.assetsRoot, fileName)
+	createdFile, err := os.Create(filePathName)
+	_, fileErr := io.Copy(createdFile, file)
+	if fileErr != nil {
+		respondWithError(w, http.StatusInternalServerError, "couldnt create file", err)
 	}
-	videoThumbnails[vid.ID] = tnail
-	fmt.Printf("%s", vid.ID)
-	newURL := "http://localhost:8091/api/thumbnails/" + vid.ID.String()
-	vid.ThumbnailURL = &newURL
-	fmt.Printf(*vid.ThumbnailURL)
+	dataURL := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, fileName)
+	vid.ThumbnailURL = &dataURL
 	dbErr := cfg.db.UpdateVideo(vid)
 	if dbErr != nil {
 		respondWithError(w, http.StatusInternalServerError, "db bork", err)
