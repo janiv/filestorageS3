@@ -78,12 +78,23 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "copy fail", err)
 		return
 	}
-	aspectRatio, aspectErr := getVideoAspectRatio(tmpFile.Name())
+
+	fastFileName, ffErr := processVideoForFastStart(tmpFile.Name())
+	if ffErr != nil {
+		respondWithError(w, http.StatusInternalServerError, "could not fast", ffErr)
+		return
+	}
+	fastFile, err := os.Open(fastFileName)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "fast file no open", err)
+	}
+	aspectRatio, aspectErr := getVideoAspectRatio(fastFileName)
 	if aspectErr != nil {
 		respondWithError(w, http.StatusInternalServerError, "aspect ratio broke", aspectErr)
+		return
 	}
 	fmt.Printf("Wrote %v from file to file\n", writeAmt)
-	_, rewErr := tmpFile.Seek(0, io.SeekStart)
+	_, rewErr := fastFile.Seek(0, io.SeekStart)
 	if rewErr != nil {
 		respondWithError(w, http.StatusInternalServerError, "could not rewind", err)
 		return
@@ -98,7 +109,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	_, upErr := cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      aws.String(cfg.s3Bucket),
 		Key:         aws.String(fileName),
-		Body:        tmpFile,
+		Body:        fastFile,
 		ContentType: aws.String(mediaType),
 	})
 	if upErr != nil {
@@ -237,5 +248,9 @@ func getVideoAspectRatio(filePath string) (string, error) {
 }
 
 func processVideoForFastStart(filePath string) (string, error) {
-	return "", nil
+	outputFilePath := filePath + ".processing"
+	args := []string{"-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outputFilePath}
+	cmd := exec.Command("ffmpeg", args...)
+	cmd.Run()
+	return outputFilePath, nil
 }
