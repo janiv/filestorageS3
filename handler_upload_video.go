@@ -194,12 +194,12 @@ type FFProbeData struct {
 			Language    string `json:"language"`
 			HandlerName string `json:"handler_name"`
 			VendorID    string `json:"vendor_id"`
-		} `json:"tags,omitempty"`
+		} `json:"tags0,omitempty"`
 		Tags1 struct {
 			Language    string `json:"language"`
 			HandlerName string `json:"handler_name"`
 			Timecode    string `json:"timecode"`
-		} `json:"tags,omitempty"`
+		} `json:"tags1,omitempty"`
 	} `json:"streams"`
 }
 
@@ -234,4 +234,8 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	}
 	return "other", nil
 
+}
+
+func processVideoForFastStart(filePath string) (string, error) {
+	return "", nil
 }
